@@ -41,7 +41,17 @@ class ChallengeDetailsView extends StatelessWidget {
                     const SizedBox(height: 20),
                     Text('Objectives', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
-                    Text(c.description),
+                    // Placeholder objectives list – could be replaced with real data later.
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('• Prepare seedling area'),
+                        SizedBox(height: 4),
+                        Text('• Plant trees in designated zone'),
+                        SizedBox(height: 4),
+                        Text('• Log progress with photos'),
+                      ],
+                    ),
                     const SizedBox(height: 20),
                     Text('Potential Impact', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),

@@ -21,135 +21,152 @@ import 'package:eco_quest/viewmodels/profile_cubit.dart';
 import 'package:eco_quest/repositories/local_storage_service.dart';
 import 'package:eco_quest/viewmodels/theme_cubit.dart';
 
-void main() {
-  runApp(const MyApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final storage = LocalStorageService();
+  await storage.init();
+  final hasSeen = await storage.hasSeenOnboarding();
+  runApp(MyApp(storage: storage, hasSeenOnboarding: hasSeen));
 }
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  late final LocalStorageService _storageService;
-  late Future<bool> _hasSeenOnboardingFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _storageService = LocalStorageService();
-    _hasSeenOnboardingFuture = _storageService.hasSeenOnboarding();
-  }
+class MyApp extends StatelessWidget {
+  final LocalStorageService storage;
+  final bool hasSeenOnboarding;
+  const MyApp({super.key, required this.storage, required this.hasSeenOnboarding});
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _hasSeenOnboardingFuture,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const MaterialApp(
-            home: Scaffold(body: Center(child: CircularProgressIndicator())),
-          );
-        }
-        final hasSeen = snapshot.data ?? false;
-        return MultiRepositoryProvider(
-          providers: [
-            RepositoryProvider(create: (_) => UserRepository()),
-            RepositoryProvider(create: (_) => ChallengeRepository()),
-            RepositoryProvider(create: (_) => ModuleRepository()),
-            RepositoryProvider(create: (_) => LeaderboardRepository()),
-            RepositoryProvider.value(value: _storageService),
-          ],
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider(
-                create: (context) => DashboardCubit(
-                  userRepository: context.read<UserRepository>(),
-                  challengeRepository: context.read<ChallengeRepository>(),
-                )..loadDashboard(),
-              ),
-              BlocProvider(
-                create: (context) => ModulesCubit(
-                  context.read<ModuleRepository>(),
-                )..loadModules(),
-              ),
-              BlocProvider(
-                create: (context) => LeaderboardCubit(
-                  context.read<LeaderboardRepository>(),
-                )..loadLeaderboard(),
-              ),
-              BlocProvider(
-                create: (context) => ProfileCubit(
-                  context.read<UserRepository>(),
-                )..loadProfile(),
-              ),
-              BlocProvider(create: (_) => ChallengeDetailsCubit()),
-              BlocProvider(
-                create: (_) => ThemeCubit(context.read<LocalStorageService>())..load(),
-              ),
-            ],
-            child: BlocBuilder<ThemeCubit, ThemeState>(
-              builder: (context, themeState) {
-                return AnimatedTheme(
-                  duration: const Duration(milliseconds: 300),
-                  data: themeState.mode == ThemeMode.dark
-                      ? AppTheme.dark()
-                      : themeState.mode == ThemeMode.light
-                          ? AppTheme.light()
-                          : MediaQuery.of(context).platformBrightness == Brightness.dark
-                              ? AppTheme.dark()
-                              : AppTheme.light(),
-                  child: MaterialApp(
-                    title: 'EcoQuest',
-                    debugShowCheckedModeBanner: false,
-                    theme: AppTheme.light(),
-                    darkTheme: AppTheme.dark(),
-                    themeMode: themeState.mode,
-                    initialRoute: hasSeen ? '/home' : '/onboarding',
-                    routes: {
-                      '/onboarding': (context) => const OnboardingView(),
-                      '/home': (context) => const HomeShell(),
-                      '/dashboard': (context) => const DashboardView(),
-                      '/modules': (context) => const ModulesView(),
-                      '/leaderboard': (context) => const LeaderboardView(),
-                      '/challenge_details': (context) => const ChallengeDetailsView(),
-                      '/profile': (context) => const ProfileView(),
-                    },
-                    onGenerateRoute: (settings) {
-                      if (settings.name != null && settings.name!.startsWith('/home/')) {
-                        final segments = settings.name!.split('/');
-                        int initialIndex = 0;
-                        if (segments.length > 2) {
-                          switch (segments[2]) {
-                            case 'modules':
-                              initialIndex = 1;
-                              break;
-                            case 'leaderboard':
-                              initialIndex = 2;
-                              break;
-                            case 'profile':
-                              initialIndex = 3;
-                              break;
-                            default:
-                              initialIndex = 0;
-                          }
-                        }
-                        return MaterialPageRoute(
-                          builder: (_) => HomeShell(initialIndex: initialIndex),
-                          settings: settings,
-                        );
-                      }
-                      return null;
-                    },
-                  ),
-                );
-              },
-            ),
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider(create: (_) => UserRepository()),
+        RepositoryProvider(create: (_) => ChallengeRepository()),
+        RepositoryProvider(create: (_) => ModuleRepository()),
+        RepositoryProvider(create: (_) => LeaderboardRepository()),
+        RepositoryProvider.value(value: storage),
+      ],
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider(
+            create: (context) => DashboardCubit(
+              userRepository: context.read<UserRepository>(),
+              challengeRepository: context.read<ChallengeRepository>(),
+            )..loadDashboard(),
           ),
-        );
-      },
+          BlocProvider(
+            create: (context) => ModulesCubit(
+              context.read<ModuleRepository>(),
+            )..loadModules(),
+          ),
+          BlocProvider(
+            create: (context) => LeaderboardCubit(
+              context.read<LeaderboardRepository>(),
+            )..loadLeaderboard(),
+          ),
+            BlocProvider(
+            create: (context) => ProfileCubit(
+              context.read<UserRepository>(),
+            )..loadProfile(),
+          ),
+          BlocProvider(create: (_) => ChallengeDetailsCubit()),
+          BlocProvider(
+            create: (_) => ThemeCubit(storage)..load(),
+          ),
+        ],
+        child: BlocBuilder<ThemeCubit, ThemeState>(
+          builder: (context, themeState) {
+            final resolvedTheme = switch (themeState.mode) {
+              ThemeMode.dark => AppTheme.dark(),
+              ThemeMode.light => AppTheme.light(),
+              _ => WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark
+                  ? AppTheme.dark()
+                  : AppTheme.light(),
+            };
+            return AnimatedTheme(
+              duration: const Duration(milliseconds: 300),
+              data: resolvedTheme,
+              child: MaterialApp(
+                title: 'EcoQuest',
+                debugShowCheckedModeBanner: false,
+                theme: AppTheme.light(),
+                darkTheme: AppTheme.dark(),
+                themeMode: themeState.mode,
+                initialRoute: hasSeenOnboarding ? '/home' : '/onboarding',
+                routes: {
+                  '/onboarding': (context) => const OnboardingView(),
+                  '/home': (context) => const HomeShell(),
+                  '/dashboard': (context) => const DashboardView(),
+                  '/modules': (context) => const ModulesView(),
+                  '/leaderboard': (context) => const LeaderboardView(),
+                  '/challenge_details': (context) => const ChallengeDetailsView(),
+                  '/profile': (context) => const ProfileView(),
+                },
+                onGenerateRoute: (settings) {
+                  if (settings.name != null && settings.name!.startsWith('/home/')) {
+                    final segments = settings.name!.split('/');
+                    int initialIndex = 0;
+                    if (segments.length > 2) {
+                      switch (segments[2]) {
+                        case 'modules':
+                          initialIndex = 1;
+                          break;
+                        case 'leaderboard':
+                          initialIndex = 2;
+                          break;
+                        case 'profile':
+                          initialIndex = 3;
+                          break;
+                        default:
+                          initialIndex = 0;
+                      }
+                    }
+                    return MaterialPageRoute(
+                      builder: (_) => HomeShell(initialIndex: initialIndex),
+                      settings: settings,
+                    );
+                  }
+                  return null;
+                },
+                builder: (context, child) {
+                  if (themeState.error != null) {
+                    return Stack(
+                      children: [
+                        if (child != null) child,
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: Material(
+                            color: Colors.redAccent.withOpacity(0.9),
+                            child: SafeArea(
+                              top: false,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Text(
+                                        'Theme preferences failed to load. Using fallback.',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return child ?? const SizedBox.shrink();
+                },
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
